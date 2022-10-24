@@ -1,0 +1,194 @@
+---
+title: "Sample Mac OS X Dashboard"
+author: "Don Fernandes"
+date: "October 23, 2022"
+output: html_document
+---
+```{r echo=FALSE}
+## multiple files exported from FW ##
+
+## load libraries ##
+library(data.table)
+library(DT)
+
+## suppress warnings globally ##
+options(warn = -1)
+
+## global DT Package options
+options(DT.options = list(pageLength = 5, language = list(search = 'Search:')))
+
+## read inventory file exported from filewave ##
+
+fw_inv <- fread("allmacs.txt")
+
+## change column names, get rid od multiword spaces ##
+names(fw_inv)[5] <- "device"
+names(fw_inv)[6] <- "os_name"
+names(fw_inv)[7] <- "os_version"
+names(fw_inv)[8] <- "total_disk"
+names(fw_inv)[9] <- "free_disk"
+names(fw_inv)[10] <- "ram"
+names(fw_inv)[11] <- "cpu_speed"
+names(fw_inv)[13] <- "last_check_in"
+
+## subsets based on OS Edition ##
+yose <- fw_inv[os_name == "Mac OS X 10.10 Yosemite"]
+mav <- fw_inv[os_name == "Mac OS X 10.9 Mavericks"]
+non_comply <- fw_inv[os_name != "Mac OS X 10.10 Yosemite" & os_name != "Mac OS X 10.9 Mavericks"]
+
+## table based on aggregated totals of OS Edition ##
+os_summary_table <- fw_inv[, .(.N), by=.(os_name)]
+
+## disk space columns clean & convert from char to num ##
+fw_inv$total_disk <- as.numeric(strsplit(fw_inv$total_disk," GB"))
+fw_inv$free_disk <- as.numeric(strsplit(fw_inv$free_disk," GB"))
+
+## new column tabulating free space as a percent of total space ##
+fw_inv$avail_disk <- (fw_inv$free_disk / fw_inv$total_disk)
+
+## sort table lowest free space first ##
+fw_inv <- fw_inv[order(fw_inv$avail_disk)]
+
+## percent converts column to character, we had to sort numerically then convert to percent ##
+fw_inv$avail_disk <- paste(round((fw_inv$avail_disk)*100,digits=1),"%",sep="")
+
+## table based on percent available disk space ##
+avail_disk_table <- fw_inv[, .(.N), by=.(device, avail_disk)]
+
+## ram size clean and convert to numeric ##
+fw_inv$ram <- as.numeric(strsplit(fw_inv$ram," GB"))
+
+## sort table lowest free ram first ##
+fw_inv <- fw_inv[order(fw_inv$ram)]
+
+## table based on amount of RAM ##
+ram_cpu_table <- fw_inv[, .(.N), by=.(device, ram, cpu_speed)]
+
+## sort table based on longest time from check-in ##
+fw_inv <- fw_inv[order(fw_inv$last_check_in)]
+
+## table based on amount of check-in time ##
+last_check_in_table <- fw_inv[, .(.N), by=.(device, last_check_in)]
+```
+### Operating System Editions
+
+```{r echo=FALSE}
+setorder(os_summary_table, -N)
+datatable(os_summary_table)
+```
+
+### Non-Compliant OS X Systems
+
+```{r echo=FALSE}
+non_comply_table <- non_comply[, .(.N), by=.(device, os_name, os_version)]
+setorder(non_comply_table, -N)
+datatable(non_comply_table)
+```
+
+### Yosemite OS X Systems
+
+```{r echo=FALSE}
+yose_table <- yose[, .(.N), by=.(device, os_name, os_version)]
+datatable(yose_table)
+```
+
+### Mavericks OS X Systems
+
+```{r echo=FALSE}
+mav_table <- mav[, .(.N), by=.(device, os_name, os_version)]
+datatable(mav_table)
+```
+
+### Available Disk Space
+
+```{r echo=FALSE}
+datatable(avail_disk_table)
+```
+
+### RAM & CPU Specs
+
+```{r echo=FALSE}
+datatable(ram_cpu_table)
+```
+
+### Last Check In Date & Time
+```{r echo=FALSE}
+## sort table based on longest time from check-in ##
+fw_inv <- fw_inv[order(fw_inv$last_check_in)]
+
+## table based on amount of check-in time ##
+last_check_in_table <- fw_inv[, .(.N), by=.(device, last_check_in)]
+datatable(last_check_in_table)
+```
+
+### Encrypted Systems
+
+```{r echo=FALSE}
+## get encryption info ##
+encrypt_inv <- fread("encryption.txt")
+
+## change column names ##
+names(encrypt_inv)[2] <- "device"
+names(encrypt_inv)[4] <- "version"
+
+## use only the columns we want ##
+encrypt_inv <- encrypt_inv[, .(device, version)]
+
+## sort in decreasing order ##
+encrypt_inv <- encrypt_inv[order(-encrypt_inv$version)]
+
+datatable(encrypt_inv)
+```
+
+### OS X Model ID (Aggregate)
+
+```{r echo=FALSE}
+## get the model_id's for age correlation ##
+prod_inv <- fread("product.txt")
+
+## remove spaces, change column names ##
+names(prod_inv)[1] <- "device"
+names(prod_inv)[2] <- "model_id"
+
+## create new column for device age ##
+prod_inv$age <- "model_id"
+
+## check model_id & assign the Apple date to age ##
+setDT(prod_inv)
+prod_inv[model_id %in% "MacBookAir3,2" , age:="Late 2010"]
+prod_inv[model_id %in% "MacBookAir4,1" , age:="Mid 2011"]
+prod_inv[model_id %in% "MacBookAir5,1" , age:="Mid 2012"]
+prod_inv[model_id %in% "MacBookAir5,2" , age:="Mid 2012"]
+prod_inv[model_id %in% "MacBookAir6,1" , age:="Mid 2013 - Early 2014"]
+prod_inv[model_id %in% "MacBookAir6,2" , age:="Mid 2013 - Early 2014"]
+prod_inv[model_id %in% "MacBookAir7,2" , age:="Early 2015"]
+prod_inv[model_id %in% "MacBookPro10,1" , age:="Mid 2012 - Early 2013"]
+prod_inv[model_id %in% "MacBookPro11,1" , age:="Late 2013 - Mid 2014"]
+prod_inv[model_id %in% "MacBookPro11,2" , age:="Late 2013 - Mid 2014"]
+prod_inv[model_id %in% "MacBookPro11,3" , age:="Late 2013 - Mid 2014"]
+prod_inv[model_id %in% "MacBookPro11,4" , age:="Mid 2015"]
+prod_inv[model_id %in% "MacBookPro12,1" , age:="Early 2015"]
+prod_inv[model_id %in% "MacBookPro5,3" , age:="Mid 2009"]
+prod_inv[model_id %in% "MacBookPro6,2" , age:="Mid 2010"]
+prod_inv[model_id %in% "MacBookPro7,1" , age:="Mid 2010"]
+prod_inv[model_id %in% "MacBookPro8,1" , age:="Early 2011 - Late 2011"]
+prod_inv[model_id %in% "MacBookPro8,2" , age:="Early 2011 - Late 2011"]
+prod_inv[model_id %in% "MacBookPro9,1" , age:="Mid 2012"]
+prod_inv[model_id %in% "MacBookPro9,2" , age:="Mid 2012 - Early 2013"]
+prod_inv[model_id %in% "Macmini7,1" , age:="Late 2014"]
+
+
+prod_inv <- prod_inv[order(prod_inv$model_id)]
+
+model_id_table <- prod_inv[, .(.N), by=.(model_id, age)]
+
+model_id_table <-  model_id_table[order(model_id_table$model_id)]
+
+datatable(model_id_table)
+```
+
+### OS X Model ID (By Device)
+
+```{r echo=FALSE}
+datatable(prod_inv)
+```
