@@ -1,0 +1,257 @@
+---
+title: "GFI Windows Asset Dashboard"
+author: "don fernandes"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## check for and load packages ##
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load("dplyr", "readr", "DT", "data.table", "ggplot2", "stringr", "RColorBrewer")
+
+## Activate libraries ##
+#library("readr")
+#library("dplyr")
+#library("DT")
+#library("data.table")
+#library("ggplot2")
+#library("stringr")
+#library("RColorBrewer")
+
+## suppress warnings globally ##
+options(warn = -1)
+
+## global DT Package options ##
+options(DT.options = list(pageLength = 10, language = list(search = 'Search:')))
+
+## Import csv file and create dataframes for processing ##
+gfi_report <- read_csv(file.choose())
+
+sysData <- select(gfi_report, site, name2, deviceserial, model, os, ram)
+sysData <- sysData[!grepl('MacBook', sysData$name2),]
+unique_df <- unique(sysData) %>% arrange(name2)
+cpu_df <- select(gfi_report, name2, name3)
+cpu_df <- cpu_df[grepl('CPU', cpu_df$name3),]
+cpu_df <- cpu_df[!grepl('MacBook', cpu_df$name2),]
+cpu_unique_df <- unique(cpu_df) %>% arrange(name2)
+
+## Convert model sku's to readable model types
+unique_df$model <- gsub("2349KAG", "T430", unique_df$model)
+unique_df$model <- gsub("20AN006VGE", "T440p", unique_df$model)
+unique_df$model <- gsub("20F9001DUS", "T460", unique_df$model)
+unique_df$model <- gsub("20F90058GE", "T460s", unique_df$model)
+unique_df$model <- gsub("20AL0076GE", "x240", unique_df$model)
+unique_df$model <- gsub("20AL00BRGE", "x240", unique_df$model)
+unique_df$model <- gsub("20ANCT01WW", "T440p", unique_df$model)
+unique_df$model <- gsub("20ANCTO1WW", "T440p", unique_df$model)
+unique_df$model <- gsub("20AWA07F00", "T440p", unique_df$model)
+unique_df$model <- gsub("20BV0006US", "T450", unique_df$model)
+unique_df$model <- gsub("20BX0011GE", "T450s", unique_df$model)
+unique_df$model <- gsub("20BX001LUS", "T450s", unique_df$model)
+unique_df$model <- gsub("23445GU", "T430", unique_df$model)
+unique_df$model <- gsub("2344BMU", "T430", unique_df$model)
+unique_df$model <- gsub("2344BZU", "T430", unique_df$model)
+unique_df$model <- gsub("2349H2G", "T430", unique_df$model)
+unique_df$model <- gsub("2349O92", "T430", unique_df$model)
+unique_df$model <- gsub("24472EG", "W530", unique_df$model)
+unique_df$model <- gsub("2518AJU", "T410", unique_df$model)
+unique_df$model <- gsub("2518BGU", "T410", unique_df$model)
+unique_df$model <- gsub("2518F4U", "T410", unique_df$model)
+unique_df$model <- gsub("4177QKU", "T420", unique_df$model)
+unique_df$model <- gsub("4177R3U", "T420", unique_df$model)
+unique_df$model <- gsub("4177RVU", "T420", unique_df$model)
+unique_df$model <- gsub("2988E2U", "M92p", unique_df$model)
+unique_df$model <- gsub("41786VU", "T420", unique_df$model)
+unique_df$model <- gsub("20AA000MUS", "T431s", unique_df$model)
+unique_df$model <- gsub("20B6005JUS", "T440", unique_df$model)
+unique_df$model <- gsub("2344BNU", "T430", unique_df$model)
+unique_df$model <- gsub("23532LU", "T430s", unique_df$model)
+unique_df$model <- gsub("23539MU", "T430s", unique_df$model)
+unique_df$model <- gsub("20BV0009US", "T450", unique_df$model)
+unique_df$model <- gsub("20AL009CUS", "x240", unique_df$model)
+unique_df$model <- gsub("20F9003GUS", "T460s", unique_df$model)
+unique_df$model <- gsub("20BX001AUS", "T450s", unique_df$model)
+unique_df$model <- gsub("20BX001KUS", "T450s", unique_df$model)
+unique_df$model <- gsub("20HF0010US", "T470s", unique_df$model)
+unique_df$model <- gsub("20HF003QUS", "T470s", unique_df$model)
+unique_df$model <- gsub("20HF004SGE", "T470s", unique_df$model)
+unique_df$model <- gsub("20HGS3XN00", "T470s", unique_df$model)
+unique_df$model <- gsub("20HES44K00", "T470", unique_df$model)
+unique_df$model <- gsub("20FMA1ESIG", "T460", unique_df$model)
+unique_df$model <- gsub("20F90019US", "T460s", unique_df$model)
+unique_df$model <- gsub("20F90035US", "T460s", unique_df$model)
+unique_df$model <- gsub("20FL7001US", "T480s", unique_df$model)
+unique_df$model <- gsub("20BX450SUS", "T450s", unique_df$model)
+unique_df$model <- gsub("20JF000DUS", "X1", unique_df$model)
+unique_df$model <- gsub("20L7001YUS", "T480s", unique_df$model)
+
+## Merge and rename column in system configuration dataframe
+combined_df <- merge(unique_df, cpu_unique_df, by = "name2")
+colnames(combined_df)[1] <- "endpoint"
+colnames(combined_df)[7] <- "cpu"
+combined_df <- combined_df[!grepl("MacBook", combined_df$model), ]
+combined_df <- combined_df[c(2, 1, 3, 4, 5, 6, 7)]
+
+## Create application list
+appData_df <- select(gfi_report, site, name2, name6) %>% na.omit()
+appData_df <- appData_df[!grepl("MacBook", appData_df$name2),]
+colnames(appData_df)[2] <- "endpoint"
+colnames(appData_df)[3] <- "application"
+```
+
+## WORKSTATION MODEL DISTRIBUTION
+```{r ws_dist}
+ws_dist_count <- count(combined_df, model)
+ws_dist_count <- as.data.frame(ws_dist_count) %>% arrange(desc(ws_dist_count$n))
+colnames(ws_dist_count) <- c("Model", "Quantity")
+datatable(ws_dist_count, caption = 'WINDOWS WORKSTATION HARDWARE MODEL DISTRIBUTION', filter = 'top')
+```
+
+## WORKSTATION TOP 5 MODEL DISTRIBUTION
+```{r ws_dist_plot}
+
+p <- ggplot(ws_dist_count %>% top_n(5), aes(Model, Quantity, fill=Model)) + geom_bar(stat = "identity", width = .5) + geom_text(aes(label=Quantity), vjust=-0.3, size=3.5)
+p + theme(axis.text.x=element_blank())
+
+```
+
+
+## ALL WORKSTATIONS SUMMARY
+```{r ws_summary}
+
+ws_summary <- arrange(combined_df, site, endpoint)
+datatable(ws_summary, caption = 'WINDOWS WORKSTATION ALL SITES', extensions = 'AutoFill', filter = 'top')
+```
+
+
+## WORKSTATION WINDOWS DISTRIBUTION SUMMARY
+```{r os_summary}
+os_type_count0 <- combined_df[!grepl("macOS", combined_df$os), ]  
+os_type_count1 <- os_type_count0[!grepl ("Home", os_type_count0$os), ]
+os_type_count2 <- os_type_count1[!grepl ("Server", os_type_count1$os), ]
+os_type_count3 <- os_type_count2[!grepl ("7 Ent", os_type_count2$os), ]
+os_type_count4 <- count(os_type_count3, os)
+colnames(os_type_count4) <- c("OS", "Quantity")
+os_type_count4 <- as.data.frame(os_type_count4) %>% arrange(desc(os_type_count4$Quantity))
+
+datatable(os_type_count4, caption = 'WINDOWS VERSION DISTRIBUTION SUMMARY', filter = 'top')
+```
+
+## WINDOWS DISTRIBUTION
+```{r}
+q <- ggplot(os_type_count4, aes(OS, Quantity, fill=OS)) + geom_bar(stat = "identity", width = .25) + geom_text(aes(label=Quantity), vjust=-0.3, size=4) + theme_classic() # + scale_x_discrete(limits = os_type_count4$OS[order(os_type_count4$Quantity)])
+q + theme(axis.text.x=element_blank())
+```
+
+## WORKSTATION WINDOWS 10 ENTERPRISE
+```{r w10ent}
+ws_w10_ent <- combined_df[grepl('Windows 10 Enterprise', combined_df$os), ] 
+ws_w10_ent <- arrange(ws_w10_ent, site, endpoint)
+datatable(ws_w10_ent, caption = 'WINDOWS 10 ENTERPRISE', filter = 'top')
+```
+
+## WORKSTATION WINDOWS 10 PRO
+```{r w10pro}
+ws_w10_pro <- combined_df[grepl('Windows 10 Pro', combined_df$os), ] 
+ws_w10_pro <- arrange(ws_w10_pro, site, endpoint)
+datatable(ws_w10_pro, caption = 'WINDOWS 10 PRO', filter = 'top')
+```
+
+## WORKSTATION WINDOWS 8.1 ENTERPRISE
+```{r w8ent}
+ws_w8_ent <- combined_df[grepl('Microsoft Windows 8.1 Enterprise', combined_df$os), ] 
+ws_w8_ent <- arrange(ws_w8_ent, site, endpoint)
+datatable(ws_w8_ent, caption = 'WINDOWS 8.1 ENTERPRISE', filter = 'top')
+```
+
+## WORKSTATION WINDOWS 8.1 PRO
+```{r w81pro}
+ws_w81_pro <- combined_df[grepl('Microsoft Windows 8.1 Pro', combined_df$os), ] 
+ws_w81_pro <- arrange(ws_w81_pro, site, endpoint)
+datatable(ws_w81_pro, caption = 'WINDOWS 8.1 PRO', filter = 'top')
+```
+
+## WORKSTATION WINDOWS 8 PRO
+```{r w8pro}
+ws_w8_pro <- combined_df[grepl('Microsoft Windows 8 Pro', combined_df$os), ] 
+ws_w8_pro <- arrange(ws_w8_pro, site, endpoint)
+datatable(ws_w8_pro, caption = 'WINDOWS 8 PRO', filter = 'top')
+```
+
+## WORKSTATION WINDOWS 7 ULTIMATE
+```{r w7ult}
+ws_w7_ult <- combined_df[grepl('Microsoft Windows 7 Ultimate', combined_df$os), ] 
+ws_w7_ult <- arrange(ws_w7_ult, site, endpoint)
+datatable(ws_w7_ult, caption = 'WINDOWS 7 ULTIMATE', filter = 'top')
+```
+
+## WORKSTATION WINDOWS 7 PRO
+```{r w7pro}
+ws_w7_pro <- combined_df[grepl('Microsoft Windows 7 Pro', combined_df$os), ] 
+ws_w7_pro <- arrange(ws_w7_pro, site, endpoint)
+datatable(ws_w7_pro, caption = 'WINDOWS 7 PRO', filter = 'top')
+```
+
+## WORKSTATION SOFTWARE INVENTORY
+```{r software}
+app_list <- count(appData_df, application)
+app_list <- app_list[!grepl("KB", app_list$application), ]
+app_list <- app_list[!grepl("Windows", app_list$application), ]
+datatable(app_list, caption = 'APPLICATION NAMES AND COUNT', filter = 'top')
+```
+
+## WORKSTATIONS APP SEARCH - SEARCH FOR APPS BY WORKSTATION
+```{r softwaresearch}
+
+appSearch0 <- appData_df[!grepl("Windows", appData_df$application), ]
+appSearch1 <- appSearch0[!grepl("KB", appSearch0$application), ]
+appSearch2 <- appSearch1[!grepl("Visual", appSearch1$application), ]
+appSearch3 <- appSearch2[!grepl("Inactive", appSearch2$application), ]
+appSearch4 <- appSearch3[!grepl("Click-to-Run", appSearch3$application), ]
+appSearch5 <- appSearch4[!grepl("ScriptRunner", appSearch4$application), ]
+appSearch6 <- appSearch5[!grepl("HP", appSearch5$application), ]
+appSearch7 <- appSearch6[!grepl("Alcor", appSearch6$application), ]
+appSearch8 <- appSearch7[!grepl("CyberLink", appSearch7$application), ]
+appSearch9 <- appSearch8[!grepl("Epson", appSearch8$application), ]
+appSearch10 <- appSearch9[!grepl("Intel(R)", appSearch9$application), ]
+appSearch11 <- appSearch10[!grepl("Helper", appSearch10$application), ]
+
+appSearch12 <- appSearch11[!grepl("Intel", appSearch11$application), ]
+appSearch13 <- appSearch12[!grepl("Maintenance", appSearch12$application), ]
+appSearch14 <- appSearch13[!grepl("Power2", appSearch13$application), ]
+appSearch15 <- appSearch14[!grepl("DVD", appSearch14$application), ]
+appSearch16 <- appSearch15[!grepl("Realtek", appSearch15$application), ]
+appSearch17 <- appSearch16[!grepl("HEVC", appSearch16$application), ]
+appSearch18 <- appSearch17[!grepl("Installer", appSearch17$application), ]
+appSearch19 <- appSearch18[!grepl("NVIDIA", appSearch18$application), ]
+appSearch20 <- appSearch19[!grepl("Conexant", appSearch19$application), ]
+appSearch21 <- appSearch20[!grepl("DisplayLink", appSearch20$application), ]
+
+appSearch22 <- appSearch21[!grepl("Dolby", appSearch21$application), ]
+appSearch23 <- appSearch22[!grepl("CommonSetup", appSearch22$application), ]
+appSearch24 <- appSearch23[!grepl("Synaptics", appSearch23$application), ]
+appSearch25 <- appSearch24[!grepl("Refresh", appSearch24$application), ]
+appSearch26 <- appSearch25[!grepl("Keyboard", appSearch25$application), ]
+appSearch27 <- appSearch26[!grepl("Vulkan", appSearch26$application), ]
+appSearch28 <- appSearch27[!grepl(".NET Core", appSearch27$application), ]
+appSearch29 <- appSearch28[!grepl("Lenovo", appSearch28$application), ]
+appSearch30 <- appSearch29[!grepl("Think", appSearch29$application), ]
+appSearch31 <- appSearch30[!grepl("GoTo", appSearch30$application), ]
+
+appSearch32 <- appSearch31[!grepl("Runtime", appSearch31$application), ]
+appSearch33 <- appSearch32[!grepl("TWAIN", appSearch32$application), ]
+appSearch34 <- appSearch33[!grepl("Inst5676", appSearch33$application), ]
+appSearch35 <- appSearch34[!grepl("SDK", appSearch34$application), ]
+appSearch36 <- appSearch35[!grepl("Camera", appSearch35$application), ]
+appSearch37 <- appSearch36[!grepl("RapidBoot", appSearch36$application), ]
+appSearch38 <- appSearch37[!grepl("TMFIP", appSearch37$application), ]
+appSearch39 <- appSearch38[!grepl("VC+", appSearch38$application), ]
+appSearch40 <- appSearch39[!grepl("Metric", appSearch39$application), ]
+appSearch41 <- appSearch40[!grepl("RICOH", appSearch40$application), ]
+appSearch42 <- appSearch41[!grepl("swMSM", appSearch41$application), ]
+
+datatable(appSearch42, caption = 'APPLICATION SEARCH', filter = 'top')
+```
