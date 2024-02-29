@@ -1,0 +1,474 @@
+---
+title: "Analysis of FEMA NFIP Claims Paid 1990-2023"
+author: "don fernandes"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+# set working directory where data and output are stored
+setwd("/Users/cbc/Desktop/dev/fema")
+## load libraries ##
+#install.packages("rfema", repos = "https://ropensci.r-universe.dev")
+if (!require("pacman"))
+  install.packages("pacman")
+pacman::p_load(data.table, htmltools, janitor, knitr, lubridate, reactable, reactablefmtr, readr, rmarkdown, tidyverse, rfema, usdata)
+
+```
+
+```{r img-with-knitr, echo=FALSE, fig.align='center', out.width='50%', include=TRUE}
+knitr::include_graphics("FEMA_Logo.png")
+```
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+
+<body>
+<div class="myDiv1">
+
+<h4><strong>Synopsis</strong></h4>
+  <p style="color:black"><strong>This data set provides details on FEMA National Flood Insurance Program, (NFIP), claims transactions. 
+It is derived from the NFIP system of record, staged in the NFIP reporting platform and redacted to protect 
+policy holder personally identifiable information. We examine only FEMA flood claim data in this analysis. 
+</br></br>
+Payments are grouped by decade: 1990, 2000, 2010, and 2020. It will be shown that single weather events occuring in a single year represent a significant percentage of total claims for the entire sampled decade.
+</br></br>
+We will also show that over a 33 year period, (1990-2023), three states received a significant percentage of overall claim payments as compared to the remainder of the country.
+</strong></p>
+
+</div>
+</body>
+
+</br></br>
+</html>
+```
+```{r load data, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## download and save data ##
+#nfip_claims <- fread("https://www.fema.gov/about/reports-and-data/openfema/FimaNfipClaims.csv")
+#saveRDS(nfip_claims, file = "nfip_claims.Rds")
+nfip_claims <- readRDS(file = "nfip_claims.Rds")
+
+```
+
+```{r clean data, include=FALSE}
+# Across the United States, process total amount of claims paid
+# decade 2020
+usa_2020 <- nfip_claims[(yearOfLoss >= 2020) & (yearOfLoss < 2024)]
+tmp1 <- usa_2020[, c("state","countyCode","yearOfLoss","floodEvent", "netBuildingPaymentAmount", "netContentsPaymentAmount")]
+tmp1[, net_payments := netBuildingPaymentAmount + netContentsPaymentAmount]
+tmp2 <- tmp1 %>% 
+  group_by(state) %>%
+  summarise(across(c(net_payments), sum))
+tmp2$net_payments <- round(tmp2$net_payments/10^6, digits = 2)
+
+tmp_percent <- tmp1 %>%
+  group_by(yearOfLoss, floodEvent, state) %>%
+  summarise(across(c(net_payments), sum)) %>%
+  arrange(desc(net_payments))
+  total_payments <- sum(tmp_percent$net_payments)
+  ian_fl <- head(tmp_percent$net_payments, 1)
+  ian_percent <- round(((ian_fl/total_payments)*100), digits = 0)
+
+# decade 2010
+usa_2010 <- nfip_claims[(yearOfLoss >= 2010) & (yearOfLoss <= 2019)]
+tmp3 <- usa_2010[, c("state","countyCode","yearOfLoss","floodEvent", "netBuildingPaymentAmount", "netContentsPaymentAmount")]
+tmp3[, net_payments := netBuildingPaymentAmount + netContentsPaymentAmount]
+tmp4 <- tmp3 %>% 
+  group_by(state) %>%
+  summarise(across(c(net_payments), sum))
+tmp4$net_payments <- round(tmp4$net_payments/10^6, digits = 2)
+
+tmp_percent <- tmp3 %>%
+  group_by(yearOfLoss, floodEvent, state) %>%
+  summarise(across(c(net_payments), sum)) %>%
+  arrange(desc(net_payments))
+  total_payments <- sum(tmp_percent$net_payments)
+  harvey <- head(tmp_percent$net_payments, 1)
+  harvey_percent <- round(((harvey/total_payments)*100), digits = 0)
+
+# decade 2000
+usa_2000 <- nfip_claims[(yearOfLoss >= 2000) & (yearOfLoss <= 2009)]
+tmp5 <- usa_2000[, c("state","countyCode","yearOfLoss","floodEvent", "netBuildingPaymentAmount", "netContentsPaymentAmount")]
+tmp5[, net_payments := netBuildingPaymentAmount + netContentsPaymentAmount]
+tmp6 <- tmp5 %>% 
+  group_by(state) %>%
+  summarise(across(c(net_payments), sum))
+tmp6$net_payments <- round(tmp6$net_payments/10^6, digits = 2)
+
+tmp_percent <- tmp5 %>%
+  group_by(yearOfLoss, floodEvent, state) %>%
+  summarise(across(c(net_payments), sum)) %>%
+  arrange(desc(net_payments))
+  total_payments <- sum(tmp_percent$net_payments)
+  kat <- head(tmp_percent$net_payments, 1)
+  kat_percent <- round(((kat/total_payments)*100), digits = 0)
+
+# decade 1990
+usa_1990 <- nfip_claims[(yearOfLoss >= 1990) & (yearOfLoss <= 1999)]
+tmp7 <- usa_1990[, c("state","countyCode","yearOfLoss","floodEvent", "netBuildingPaymentAmount", "netContentsPaymentAmount")]
+tmp7[, net_payments := netBuildingPaymentAmount + netContentsPaymentAmount]
+tmp8 <- tmp7 %>% 
+  group_by(state) %>%
+  summarise(across(c(net_payments), sum))
+tmp8$net_payments <- round(tmp8$net_payments/10^6, digits = 2)
+
+tmp_percent <- tmp7 %>%
+  group_by(yearOfLoss, floodEvent, state) %>%
+  summarise(across(c(net_payments), sum)) %>%
+  arrange(desc(net_payments))
+  total_payments <- sum(tmp_percent$net_payments)
+  may <- head(tmp_percent$net_payments, 1)
+  may_percent <- round(((may/total_payments)*100), digits = 0)
+
+# decade 1990-2023
+usa_all <- nfip_claims[(yearOfLoss >= 1990) & (yearOfLoss <= 2023)]
+tmp9 <- usa_all[, c("state","countyCode","yearOfLoss","floodEvent", "netBuildingPaymentAmount", "netContentsPaymentAmount")]
+tmp9[, net_payments := netBuildingPaymentAmount + netContentsPaymentAmount]
+tmp10 <- tmp9 %>% 
+  group_by(state) %>%
+  summarise(across(c(net_payments), sum))
+tmp10$net_payments <- round(tmp10$net_payments/10^6, digits = 2)
+
+tmp_percent <- tmp9 %>%
+  group_by(yearOfLoss, floodEvent, state) %>%
+  summarise(across(c(net_payments), sum)) %>%
+  arrange(desc(net_payments))
+total_payments <- sum(tmp_percent$net_payments)
+
+top3 <- sum(head(tmp_percent$net_payments, 3))
+top3_percent <- round(((top3/total_payments)*100), digits = 0)
+
+```
+
+
+```{r table01, echo=FALSE, include=TRUE}
+# https://glin.github.io/reactable/index.html
+
+reactable(tmp2,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(net_payments="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+                         state = colDef(maxWidth = 100)
+                         )
+            ) %>% 
+add_title(title = "2020-2023 NFIP Claims Paid",
+align = "center"
+          )%>%   
+  add_subtitle(
+  subtitle = 'By State - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+ # margin = reactablefmtr::margin(t=10,r=0,b=15,l=0)
+)
+
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv2 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: center;
+}
+</style>
+</head>
+
+<center>
+<img src = 'https://eoimages.gsfc.nasa.gov/images/imagerecords/150000/150408/ian_goes_2022271.jpg' alt='Hurricane Ian' width='800' height='440'>
+</center>
+
+</br>
+
+<body>
+
+<div class="myDiv2">
+  <h4 style="color:red"><strong>In 2022 Hurricane Ian struck Florida representing `r ian_percent`% of total claims payed in this decade.<strong></h4>
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+
+```{r table02, echo=FALSE, include=TRUE}
+# https://glin.github.io/reactable/index.html
+
+reactable(tmp4,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(net_payments="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+                         state = colDef(maxWidth = 100)
+                         )
+            ) %>% 
+  add_title(title = '2010-2019 NFIP Claims Paid',
+            align = "center"
+            ) %>%   
+  add_subtitle(
+  subtitle = 'By State - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+ # margin = reactablefmtr::margin(t=10,r=0,b=15,l=0)
+) 
+
+
+
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv3 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: center;
+}
+</style>
+</head>
+
+<center>
+<img src = 'https://eoimages.gsfc.nasa.gov/images/imagerecords/90000/90822/harvey_goe_2017237.gif' alt='Hurricane Harvey' width='800' height='440'>
+</center>
+
+</br>
+
+<body>
+
+<div class="myDiv3">
+  <h4 style="color:red"><strong>In 2017 Hurricane Harvey struck Texas representing `r harvey_percent`% of total claims payed in this decade.<strong></h4>
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+
+
+```{r table03, echo=FALSE, include=TRUE}
+# https://glin.github.io/reactable/index.html
+
+reactable(tmp6,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(net_payments="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+                         state = colDef(maxWidth = 100)
+                         )
+            ) %>% 
+  add_title(title = '2000-2009 NFIP Claims Paid',
+            align = "center"
+            ) %>%   
+  add_subtitle(
+  subtitle = 'By State - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+ # margin = reactablefmtr::margin(t=10,r=0,b=15,l=0)
+)
+
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv4 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: center;
+}
+</style>
+</head>
+
+<center>
+<img src = 'https://eoimages.gsfc.nasa.gov/images/imagerecords/15000/15395/Katrina2_TMO_2005240_lrg.jpg' alt='Hurricane Katrina' width='800' height='440'>
+</center>
+
+</br>
+
+<body>
+
+<div class="myDiv4">
+  <h4 style="color:red"><strong>In 2005 Hurricane Katrina struck Louisiana representing `r kat_percent`% of total claims payed in this decade.<strong></h4>
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+
+```{r table04, echo=FALSE, include=TRUE}
+# https://glin.github.io/reactable/index.html
+
+reactable(tmp8,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(net_payments="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+                         state = colDef(maxWidth = 100)
+                         )
+            ) %>%  
+   add_title(title = '1990-1999 NFIP Claims Paid',
+            align = "center"
+            )%>%
+  add_subtitle(
+  subtitle = 'By State - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+ # margin = reactablefmtr::margin(t=10,r=0,b=15,l=0)
+) 
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv4 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: left;
+}
+</style>
+</head>
+
+<center>
+<img src = ' https://bloximages.newyork1.vip.townnews.com/nola.com/content/tncms/assets/v3/editorial/c/a7/ca761022-92d1-5b42-a5c4-7fbadc889aa4/5d138057c8b61.image.jpg?resize=665%2C435' alt='May Flooding' width='800' height='440'>
+</center>
+
+</br>
+
+<body>
+
+<div class="myDiv4">
+  <h4 style="color:red"><strong>In May 1995, Louisiana received 27.5" of rain in a 40 hour period resulting in catastrophic flooding representing `r may_percent`% of total claims payed in this decade.<strong></h4>
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+```{r table05, echo=FALSE, include=TRUE}
+# https://glin.github.io/reactable/index.html
+
+reactable(tmp10,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(net_payments="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+                         state = colDef(maxWidth = 100)
+                         )
+            ) %>% 
+  add_title(title = '1990-2023 NFIP Claims Paid',
+            align = "center"
+            ) %>%   
+  add_subtitle(
+  subtitle = 'By State - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+ # margin = reactablefmtr::margin(t=10,r=0,b=15,l=0)
+) 
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv5 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: left;
+}
+</style>
+</head>
+
+<center>
+<img src = 'https://eoimages.gsfc.nasa.gov/images/imagerecords/77000/77146/ISS030-E-055569_lrg.jpg' alt='Southern US' width='800' height='440'>
+</center>
+
+</br>
+
+<body>
+
+<div class="myDiv5">
+  <h4 style="color:red"><strong>Between 1990-2023, Louisiana, Texas, and Florida received `r top3_percent`% of total NFIP claim payments distributed in the United States. <strong></h4>
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv6 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+<body>
+
+<div class="myDiv6">
+<h4><strong>Source Material</strong></h4>
+  <p style="color:black"><strong>FEMA NFIP Dataset: <a href='https://www.fema.gov/openfema-data-page/fima-nfip-redacted-claims-v2'>{NFIP_Claims}</a>
+ </strong></p>
+  <p style="color:black"><strong>Satellite Hurricane Images: <a href='https://earthobservatory.nasa.gov/images'>{NASA Images}</a>"</strong></p>
+  <p style="color:black"><strong>Louisiana Flood Image: <a href='https://nola.com'>{May 1995 Flood}</a>"</strong></p>
+</div>
+
+</body>
+</br></br>
+</html>
+```
