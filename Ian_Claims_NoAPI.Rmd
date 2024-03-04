@@ -1,0 +1,552 @@
+---
+title: "Hurricane Ian Flood Impact in Southwest Florida"
+author: "don fernandes"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+# set working directory where data and output are stored
+setwd("/Users/cbc/Desktop/dev/fema")
+## load libraries ##
+#install.packages("rfema", repos = "https://ropensci.r-universe.dev")
+if (!require("pacman"))
+  install.packages("pacman")
+pacman::p_load(choroplether, choroplethrMaps, data.table, ggmap, ggthemes, htmltools, knitr, 
+               reactable, reactablefmtr, readr, rmarkdown, tidyverse, zipcodeR)
+```
+
+```{r img-with-knitr, echo=FALSE, fig.align='center', out.width='50%', include=TRUE}
+knitr::include_graphics("FEMA_Logo.png")
+```
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+<br>
+<body>
+<div class="myDiv1">
+
+<h4><strong>Summary</strong></h4>
+  <p style="color:black"><strong>This data set details FEMA National Flood Insurance Program, (NFIP), claim transactions for the Hurricane Ian storm event with a focus on it's impact in Southwest Florida. It is derived from the NFIP system of record, staged in the NFIP reporting platform and redacted to protect policy holder personally identifiable information. We examine only FEMA flood claim data in this analysis. 
+</br></br>
+From Wikipedia:
+<br>
+Hurricane Ian was a deadly and destructive Category 5 Atlantic hurricane making landfall in Southwest Florida on September 28,2022. It is the third-costliest weather disaster on record worldwide; the deadliest hurricane to strike Florida since 1935; and the strongest hurricane in Florida since Michael in 2018. Ian caused widespread damage across western Cuba, Florida, and the Carolinas. Ian was the ninth named storm, fourth hurricane, and second major hurricane of the 2022 Atlantic hurricane season. Ian was the first Category 5 hurricane in the Atlantic since Lorenzo in 2019.
+</br>
+</strong></p>
+
+</div>
+</body>
+
+</br>
+</html>
+```
+
+```{=html}  
+<html>
+<head>
+<br>
+<center>
+<img src = 'https://eoimages.gsfc.nasa.gov/images/imagerecords/150000/150408/ian_goes_2022271.jpg' alt='Hurricane Ian' width='800' height='440'>
+</center>
+</head>
+<br>
+</html>
+```
+
+```{r load data, include=FALSE,cache=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## download and save data ##
+#nfip_claims <- fread("https://www.fema.gov/about/reports-and-data/openfema/FimaNfipClaims.csv")
+#saveRDS(nfip_claims, file = "nfip_claims.Rds")
+nfip_claims <- readRDS(file = "nfip_claims.Rds")
+
+```
+
+```{r clean data, include=FALSE}
+# subset data FL 2022
+fl_2022 <- nfip_claims[(yearOfLoss == 2022) & (state == 'FL')] 
+tmp1 <- fl_2022[, c("state","countyCode","yearOfLoss","floodEvent", 
+                    "netBuildingPaymentAmount", "netContentsPaymentAmount", "reportedZipCode")]
+tmp1[, net_payments := netBuildingPaymentAmount + netContentsPaymentAmount]
+
+# group and sum net payments by county
+tmp2 <- tmp1 %>%
+  filter(floodEvent == 'Hurricane Ian' & net_payments > 0) %>%
+  group_by(state, countyCode, floodEvent) %>%
+  summarise(value = sum(net_payments))
+
+# drop NA counties and cleanup fips codes
+tmp2<-tmp2[!is.na(tmp2$countyCode),]
+colnames(tmp2)[2] <- 'fips'
+tmp2$fips <- gsub('^12', "", tmp2$fips)
+
+# get a list of counties and clean it up
+ctys <- read_csv("CountyPlacesCodes.csv")
+colnames(ctys)[3] <- 'fips'
+ctys <- ctys[, c("County", "fips")]
+ctys <- unique(ctys)
+colnames(ctys)[1] <- 'county'
+ctys$county <- tolower(ctys$county)
+
+# merge county list with payment data
+ctys_merged <- merge(tmp2, ctys, by = 'fips')
+ctys_fl <- ctys_merged[, c("county", "value")]
+
+```
+
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+
+<body>
+<div class="myDiv1">
+
+<h4><strong>Landfall</strong></h4>
+  <p style="color:black"><strong>
+From Wikipedia:
+<br>
+Ian peaked as a Category 5 hurricane with sustained winds of 160 mph (260 km/h) early on September 28, while progressing to Florida's west coast and making initial landfall on Cayo Costa Island. Ian then 'bounced', and made a second landfall south of Punta Gorda near Pirate Harbor at 20:35 UTC with sustained winds of 145 mph (230 km/h).
+</br></br>
+Hurricane Ian claimed 161 lives with estimated losses of $113 billion, making it the costliest hurricane in Florida's history, (surpassing Irma in 2017). It is the third-costliest hurricane in US history, behind only 2005 Katrina and 2017 Harvey. The picture below is Fort Myers the morning after Ian.
+</strong></p>
+
+</div>
+</body>
+
+</br>
+<center>
+<img src = 'https://assets2.cbsnewsstatic.com/hub/i/2022/09/29/cb62e6eb-a060-4f8d-bd78-cf80acde2e49/topshot-us-weather-hurricane-ian.jpg?v=b15ba9ca383d8472a236fb5b5c7ca2b3' alt='Ian Landfall' width='800' height='440'>
+</center>
+</br>
+
+</html>
+```
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+
+<body>
+<div class="myDiv1">
+
+<h4><strong>Impact on Southwest Florida - Deaths</strong></h4>
+  <p style="color:black"><strong>
+From Wikipedia:
+<br>
+According to the Florida Medical Examiners Commission, as of February 3, 2023, 150 people were confirmed dead in Florida as a result of Hurricane Ian. 72 of those deaths occurred in Lee County, 12 in Sarasota County, and 9 in Charlotte County.
+</strong></p>
+
+</div>
+</body>
+
+</br>
+</html>
+```
+
+
+```{r deaths, echo=FALSE, include=TRUE, fig.align='center'}
+# https://glin.github.io/reactable/index.html
+
+# deaths
+ian_dead <- data.frame(counties = c("Lee", "Charlotte", "Sarasota"),
+              deaths = c(72, 9, 12))
+percent_dead <- sum(ian_dead$deaths)/150*100
+
+reactable(
+  theme = nytimes(centered = TRUE),
+  ian_dead,
+  pagination = FALSE,
+  bordered = TRUE,
+  defaultSorted = "deaths",
+  defaultSortOrder = "desc",
+  defaultColDef = colDef(
+    cell = data_bars(ian_dead, 
+                     fill_color = "red",
+                     text_position = "center",
+                     text_size = 14
+                     )
+  )
+)
+
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv2 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="myDiv2">
+  <h4 style="color:red"><strong>`r percent_dead`% of Florida's Hurricane Ian fatalities occured in three Southwest Florida counties.<strong></h4>
+</div>
+</body>
+</br></br>
+</html>
+```
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+<body>
+<div class="myDiv1">
+
+<h4><strong>Impact on Southwest Florida - Flood Damage</strong></h4>
+  <p style="color:black"><strong>
+From Wikipedia:
+<br>
+Much of Ian's damage was caused by storm surge flooding of 10–15 ft (3.0–4.6 m). Fort Myers, Cape Coral, and Naples were particularly hard hit, leaving millions without power and forcing numerous inhabitants to take refuge on their roofs. Sanibel Island, Fort Myers Beach, and Pine Island bore the brunt of Ian's damage, leveling most standing structures; the Sanibel Causeway and Matlacha Bridge which connects Pine Island to the mainland were also destroyed, resulting in islanders stranded for several days.
+</br>
+The graph and table below outline the impact across Florida counties. 
+</strong></p>
+
+</div>
+</body>
+
+</br>
+</html>
+```
+
+```{r choromap, echo=FALSE, message=FALSE, warning=FALSE, include=TRUE, paged.print=FALSE, fig.align='center'}
+# https://rkabacoff.github.io/datavis/Maps.html
+library(choroplethr)
+library(choroplethrMaps
+        )
+# set google map session api key
+register_google(key = "ENTER YOUR GOOGLE MAP KEY HERE")
+
+# build region list in maps
+data(county.regions, 
+     package = "choroplethrMaps")
+region <- county.regions %>%
+  filter(state.name == "florida")
+
+# join counties with map regions
+plotdata <- inner_join(ctys_fl, 
+                       region, 
+                       by=c("county" = "county.name"))
+
+# create map
+pchoro <- county_choropleth(plotdata, 
+                  state_zoom = "florida",
+                  reference_map = TRUE,
+                  num_colors = 8) +
+  scale_fill_brewer(palette="YlOrRd") +
+  labs(title = "Flood Claims by Florida County",
+       subtitle = "Hurricane Ian",
+       caption = "Hurricane Ian Flood Claims",
+       fill = "Claim Amounts $$$")
+
+pchoro
+
+```
+
+```{=html}
+<br>
+```
+
+```{r ctyvalues, echo=FALSE, include=TRUE}
+# https://glin.github.io/reactable/index.html
+
+tmp3 <- ctys_fl
+tmp3$value <- round(tmp3$value/10^6, digits = 2)
+totalFLclaims <- sum(tmp3$value)
+
+tmp3 <- tmp3 %>%
+  mutate(percentClaim = (value/totalFLclaims)*100)
+tmp3$percentClaim <- round(tmp3$percentClaim, digits = 2)
+
+reactable(tmp3,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(percentClaim="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          columns = list(value = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+                         county = colDef(maxWidth = 100))
+            ) %>% 
+  # add_title(title = 'Hurricane Ian Flood Claims in Florida',
+  #           align = "center"
+  #           ) %>%   
+  add_subtitle(
+  subtitle = 'By County - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+ # margin = reactablefmtr::margin(t=10,r=0,b=15,l=0)
+)
+
+# sw fl percentage
+swfl <- data.frame(counties = c("Lee", "Collier", "Charlotte", "Sarasota", "Monroe"),
+                   claims = c(69, 19, 1.25, 1.16, .62))
+swfl_claims_percent <- round(sum(swfl$claims), digits = 0)
+
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv2 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="myDiv2">
+  <h4 style="color:red"><strong>`r swfl_claims_percent`% of Florida flood claims came from five Southwest Florida counties:
+  <br>
+  Lee, Collier, Sarasota, Charlotte, and Monroe<strong></h4>
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+
+<body>
+<div class="myDiv1">
+
+<h4><strong>Sarasota County Impacts</strong></h4>
+  <p style="color:black"><strong>
+On a personal note:
+<br><br>
+I live in the southermost part of Sarasota County and was present for the entirety of the hurricane. Although our address is in Sarasota county, we are closer to Punta Gorda than the city of Sarasota. The windup to this geographic quirk is the perception that Sarasota County was spared the brunt of the storm. Those of us in Englewood, North Port, and Venice beg to differ! The table below clearly shows the demarcation between northern and southern Sarasota County.
+</strong></p>
+
+</div>
+</body>
+
+</br>
+</html>
+```
+
+
+```{r sara, echo=FALSE, include=TRUE}
+
+# sarasota cty
+sara <- tmp1[grepl('12115', tmp1$countyCode)] %>% 
+  filter(floodEvent == 'Hurricane Ian' & net_payments != 0.00)
+# total claim amt in sarasota
+sara_claims <- sum(sara$net_payments)
+# sum values by zip
+sbz <- sara %>% 
+  group_by(reportedZipCode) %>%
+  summarise(value = sum(net_payments)) %>%
+  arrange(desc(value))
+colnames(sbz)[1] <- 'zipcode'
+
+# get zips and cities for sarasota county
+library(zipcodeR)
+saracodes <- search_county("Sarasota", "FL") %>%
+  select(zipcode, major_city)
+
+# merge zip, city, and value
+srqzips <- merge(sbz, saracodes, by = 'zipcode')
+srqcity <- srqzips %>%
+  group_by(major_city) %>%
+  summarise(claims_paid = sum(value)) %>%
+  arrange(desc(claims_paid))
+
+# top 3 cities affected in SRQ county
+top3 <- head(srqcity, 3)
+top3claims <- sum(top3$claims_paid)
+top3percent <- round(top3claims/sara_claims*100, digits = 0)
+
+# calculate percent by city
+srqcity <- srqcity %>%
+  mutate(percentClaim = (claims_paid/sara_claims)*100)
+srqcity$percentClaim <- round(srqcity$percentClaim, digits = 2)
+srqcity$claims_paid <- round(srqcity$claims_paid/10^6, digits = 2)
+
+reactable(srqcity,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(claims_paid="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10
+          #columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+          #               state = colDef(maxWidth = 100)
+                         ) %>%  
+  add_subtitle(
+  subtitle = 'Sarasota County By City - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+) 
+```
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv2 {
+  border: 5px outset red;
+  background-color: pink; 
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="myDiv2">
+  <h4 style="color:red"><strong> Englewood, North Port, and Venice received `r top3percent`% of Sarasota County Ian related flood claims.
+</div>
+
+</body>
+</br></br>
+</html>
+```
+
+```{=html}  
+<html>
+<head>
+<style>
+.myDiv1 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+
+<body>
+<div class="myDiv1">
+
+<h4><strong>Zip Codes Matter!</strong></h4>
+  <p style="color:black"><strong>
+Location is everything:
+<br>
+We live in extreme southern Sarasota County, in the southernmost part of North Port. The table below illustrates how a random hurricane landing location produces hyper-localized events. 
+</strong></p>
+
+</div>
+</body>
+
+</br>
+</html>
+```
+
+```{r northport, echo=FALSE, include=TRUE}
+
+#np
+np <- srqzips %>% 
+  filter(major_city == 'North Port') %>%
+  group_by(zipcode, major_city, value) %>%
+  arrange(desc(value))
+
+np_claims <- sum(np$value)
+np$value <- round(np$value/10^6, digits = 2)
+
+
+
+reactable(np,
+          theme = nytimes(centered = TRUE),
+          defaultSorted = list(value="desc"),
+          #searchable = TRUE,
+          bordered = TRUE,
+          striped = TRUE,
+          #highlight = TRUE,
+          #compact = TRUE,
+          defaultPageSize = 10,
+          #columns = list(net_payments = colDef(name = "claims_paid", format = colFormat(prefix = "$", separators = TRUE, digits = 2)),
+          #              state = colDef(maxWidth = 100)
+            ) %>% 
+  add_subtitle(
+  subtitle = 'North Port By Zipcode - $Millions',
+  font_size = 20,
+  font_color = '#666666',
+  align = "center"
+) 
+```
+
+
+```{=html}
+<html>
+<head>
+<style>
+.myDiv6 {
+  border: 5px outset black;
+  background-color: lightgray; 
+  text-align: left;
+}
+</style>
+</head>
+<body>
+
+<div class="myDiv6">
+<h4><strong>Source Material</strong></h4>
+  <p style="color:black"><strong>FEMA NFIP Dataset: <a href='https://www.fema.gov/openfema-data-page/fima-nfip-redacted-claims-v2'>{NFIP_Claims}</a>
+ </strong></p>
+  <p style="color:black"><strong>Satellite Hurricane Images: <a href='https://earthobservatory.nasa.gov/images'>{NASA Images}</a>"</strong></p>
+  <p style="color:black"><strong>Wikipedia Hurricane Ian: <a href='https://en.wikipedia.org/wiki/Hurricane_Ian'>{2023}</a>"</strong></p>
+</div>
+
+</body>
+</br></br>
+</html>
+```
